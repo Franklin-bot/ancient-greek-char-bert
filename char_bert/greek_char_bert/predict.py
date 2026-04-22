@@ -9,7 +9,7 @@ import copy
 
 
 class MLMPredicter(CharMLMInferencer):
-    def predict(self, dicts):
+    def predict(self, dicts, top_k=1):
         """
         This function is a simple modification of the MLMInferencer/Inferencer's run_inference method (located at farm/infer.py) except that it uses a custom processor which does not mask the input (which is already masked when running prediction).
         :param dicts: Masked samples to run prediction on provided as a list of dicts. One dict per sample.
@@ -45,6 +45,7 @@ class MLMPredicter(CharMLMInferencer):
                     label_maps=pred_processor.label_maps,
                     samples=batch_samples,
                     tokenizer=pred_processor.tokenizer,
+                    top_k=top_k,
                     **batch,
                 )
                 preds_all.append(preds)
@@ -54,11 +55,11 @@ class MLMPredicter(CharMLMInferencer):
         ]
         return preds_all
 
-    def predict_sequentially(self, dicts):
+    def predict_sequentially(self, dicts, top_k=1):
         """An experimental sequential decoder, with recursively decoders one character at a time. A very slow implementation best thought of as a proof of concept."""
         nb_of_sequences = len(dicts)
         nb_finished = 0
-        predictions = self.predict(dicts=dicts)
+        predictions = self.predict(dicts=dicts, top_k=top_k)
         final_predictions = copy.deepcopy(predictions)
         while nb_finished < nb_of_sequences:
             nb_finished = 0
@@ -73,7 +74,7 @@ class MLMPredicter(CharMLMInferencer):
                 masked_seq = convert_masks(masked_seq)
                 new_masked_sequences.append(masked_seq)
             dicts = sentences_to_dicts(new_masked_sequences)
-            predictions = self.predict(dicts=dicts)
+            predictions = self.predict(dicts=dicts, top_k=top_k)
         # ensure that we output a well formated list of prediction dicts
         for i, (pred_dict, predicted_seq) in enumerate(
             zip(final_predictions, predictions)
@@ -90,6 +91,13 @@ class MLMPredicter(CharMLMInferencer):
                 "][", ""
             )
             final_predictions[i]["predictions"]["predictions"] = predicted_chars
+            final_predictions[i]["predictions"]["text_with_top_k_preds"] = (
+                final_predictions[i]["predictions"]["text_with_preds"]
+            )
+            final_predictions[i]["predictions"]["top_k_predictions"] = [
+                [{"token": predicted_char, "score": 1.0}]
+                for predicted_char in predicted_chars
+            ]
         return final_predictions
 
 

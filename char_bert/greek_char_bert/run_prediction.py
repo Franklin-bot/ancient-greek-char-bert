@@ -12,7 +12,7 @@ import re
 import argparse
 
 
-def predict_from_file(path, model, use_sequential_decoding, align, step_len):
+def predict_from_file(path, model, use_sequential_decoding, align, step_len, top_k):
     """Runs prediction using the model on the texts located in the file given in path."""
     max_seq_len = model.processor.max_seq_len - 2
     with open(path, "r") as fp:
@@ -37,15 +37,16 @@ def predict_from_file(path, model, use_sequential_decoding, align, step_len):
         sequences = convert_masking(sequences)
         dicts = sentences_to_dicts(sequences)
         if use_sequential_decoding:
-            result = model.predict_sequentially(dicts=dicts)
+            result = model.predict_sequentially(dicts=dicts, top_k=top_k)
         else:
-            result = model.predict(dicts=dicts)
+            result = model.predict(dicts=dicts, top_k=top_k)
         results.append(result)
     # output results
     for result in results:
         nb_of_masks = 0  # needed to proper alignment
         for i, res in enumerate(result):
-            prediced_text = res["predictions"]["text_with_preds"].replace("_", " ")
+            prediction_key = "text_with_top_k_preds" if top_k > 1 else "text_with_preds"
+            prediced_text = res["predictions"][prediction_key].replace("_", " ")
             masked_text = res["predictions"]["masked_text"].replace("_", " ")
             if align:
                 if not step_len:
@@ -54,7 +55,7 @@ def predict_from_file(path, model, use_sequential_decoding, align, step_len):
                 print(" " * (step_len * i + (2 * nb_of_masks)) + prediced_text)
                 nb_of_masks += len(re.findall(r"#+", masked_text[:step_len]))
             else:
-                print(res["predictions"]["text_with_preds"].replace("_", " "))
+                print(res["predictions"][prediction_key].replace("_", " "))
 
 
 if __name__ == "__main__":
@@ -95,6 +96,13 @@ if __name__ == "__main__":
         type=int,
         help="The step length to use when handling texts longer than the model's maximum input length.",
     )
+    parser.add_argument(
+        "-k",
+        "--top_k",
+        type=int,
+        default=1,
+        help="The number of candidate characters to return per masked position.",
+    )
     args = parser.parse_args()
 
     file = args.file
@@ -102,6 +110,7 @@ if __name__ == "__main__":
     use_sequential_decoding = args.sequential_decoding
     align = args.align
     step_len = args.step_len
+    top_k = args.top_k
     model = MLMPredicter.load(model_path, batch_size=32)
 
-    predict_from_file(file, model, use_sequential_decoding, align, step_len)
+    predict_from_file(file, model, use_sequential_decoding, align, step_len, top_k)

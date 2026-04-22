@@ -90,12 +90,19 @@ python3 run_prediction.py -h
 ```
 
 Note that sequential decoding `-s` can be very slow, especially without a GPU. Alignment `-a` is best used with text wrapping off.
+Use `-k` / `--top_k` to return multiple candidate characters per masked position; when `k > 1` they are shown inside the brackets separated by `/`.
 
 If you'd like to, for instance, use the `greek_char_BERT` model to predict missing characters in a text located in `data/prediction_test.txt` using sequential decoding, this can be done with (if you are in the `greek_char_bert` folder):
 
 ```
 python3 run_prediction.py -f ../../data/prediction_test.txt -m ../../models/greek_char_BERT -s
 ``` 
+
+To see the top 5 candidates for each missing character instead of only the single best prediction:
+
+```
+python3 run_prediction.py -f ../../data/prediction_test.txt -m ../../models/greek_char_BERT -k 5
+```
 
 The output with appear directly on the command line.
 
