@@ -7,12 +7,31 @@ from greek_char_bert.predict import (
 )
 from greek_char_bert.run_eval import convert_masking
 from greek_data_prep.clean_data import clean_texts, CHARS_TO_REMOVE, CHARS_TO_REPLACE
-from cltk.corpus.utils.formatter import cltk_normalize
+try:
+    from cltk.text.utils import cltk_normalize
+except ImportError:
+    from cltk.corpus.utils.formatter import cltk_normalize
 import re
 import argparse
 
 
-def predict_from_file(path, model, use_sequential_decoding, align, step_len, top_k):
+def format_top_k_scores(top_k_predictions):
+    """Formats top-k predictions with their scores for CLI output."""
+    lines = []
+    for i, mask_predictions in enumerate(top_k_predictions, start=1):
+        candidates = ", ".join(
+            [
+                "{}:{:.4f}".format(prediction["token"], prediction["score"])
+                for prediction in mask_predictions
+            ]
+        )
+        lines.append("mask {} -> {}".format(i, candidates))
+    return lines
+
+
+def predict_from_file(
+    path, model, use_sequential_decoding, align, step_len, top_k, show_scores
+):
     """Runs prediction using the model on the texts located in the file given in path."""
     max_seq_len = model.processor.max_seq_len - 2
     with open(path, "r") as fp:
@@ -53,9 +72,19 @@ def predict_from_file(path, model, use_sequential_decoding, align, step_len, top
                     step_len = round(max_seq_len / 2)
                 # an approximate alignment is calculated by shifting each line by step_len + 2 * the number of masks in the overlaping portion of the previous prediction (to take into account the square brackets which are added around each prediction)
                 print(" " * (step_len * i + (2 * nb_of_masks)) + prediced_text)
+                if show_scores and "top_k_predictions" in res["predictions"]:
+                    for score_line in format_top_k_scores(
+                        res["predictions"]["top_k_predictions"]
+                    ):
+                        print(" " * (step_len * i + (2 * nb_of_masks)) + score_line)
                 nb_of_masks += len(re.findall(r"#+", masked_text[:step_len]))
             else:
                 print(res["predictions"][prediction_key].replace("_", " "))
+                if show_scores and "top_k_predictions" in res["predictions"]:
+                    for score_line in format_top_k_scores(
+                        res["predictions"]["top_k_predictions"]
+                    ):
+                        print(score_line)
 
 
 if __name__ == "__main__":
@@ -103,6 +132,12 @@ if __name__ == "__main__":
         default=1,
         help="The number of candidate characters to return per masked position.",
     )
+    parser.add_argument(
+        "--show_scores",
+        default=False,
+        action="store_true",
+        help="Print the score for each candidate character at each masked position.",
+    )
     args = parser.parse_args()
 
     file = args.file
@@ -111,6 +146,9 @@ if __name__ == "__main__":
     align = args.align
     step_len = args.step_len
     top_k = args.top_k
+    show_scores = args.show_scores
     model = MLMPredicter.load(model_path, batch_size=32)
 
-    predict_from_file(file, model, use_sequential_decoding, align, step_len, top_k)
+    predict_from_file(
+        file, model, use_sequential_decoding, align, step_len, top_k, show_scores
+    )

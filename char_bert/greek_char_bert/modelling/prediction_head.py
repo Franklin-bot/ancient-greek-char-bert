@@ -122,13 +122,17 @@ class CharMLMHead(BertLMHead):
         return text.replace("][", "")
 
     def insert_top_k_preds_into_text(self, text, top_k_preds):
-        """Inserts top-k predictions into the original text, joining candidates with slashes."""
+        """Inserts top-k predictions into the original text, joining candidates with slashes.
+
+        Unlike the top-1 display, we keep adjacent mask groups separate so each original
+        masked character position remains visible in the output.
+        """
         for mask_predictions in top_k_preds:
             candidates = "/".join(
                 [prediction["token"].strip("#") for prediction in mask_predictions]
             )
             text = text.replace("#", f"[{candidates}]", 1)
-        return text.replace("][", "")
+        return text
 
     def formatted_preds(self, logits, label_map, samples, top_k=1, **kwargs):
         """Take the raw logits and produce json output containing the original text, the text with predictions, the masked text and the predicted characters."""
